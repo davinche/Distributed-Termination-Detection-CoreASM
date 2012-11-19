@@ -1,0 +1,20 @@
+CoreASM TerminationDetection
+
+use Standard
+use StandardPlugins
+use Signature
+use MathPlugin
+
+enum COLOR = {black, white}
+enum TOKEN = {blackToken, whiteToken}
+enum STATUS = {active, passive}
+enum MACHINE = {m0, m1, m2}
+enum COMPUTATION = {c1,c2}
+
+universe Agents = {protocol, activation, p, supervisor}
+
+function color: MACHINE * COMPUTATION -> COLOR
+function token: MACHINE * COMPUTATION -> TOKEN
+function status: MACHINE * COMPUTATION -> STATUS
+                
+init InitRule
