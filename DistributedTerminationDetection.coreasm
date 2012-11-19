@@ -6,15 +6,41 @@ use Signature
 use MathPlugin
 
 enum COLOR = {black, white}
-enum TOKEN = {blackToken, whiteToken}
-enum STATUS = {active, passive}
-enum MACHINE = {m0, m1, m2}
+//enum TOKEN = {blackToken, whiteToken}
+enum STATUS = {active, inactive}
+enum MACHINE = {m0, m1, m2, m10, m11, m21, m20, m31, m22, m30, m41, m32}
 enum COMPUTATION = {c1,c2}
 
 universe Agents = {protocol, activation, p, supervisor}
 
-function color: MACHINE * COMPUTATION -> COLOR
-function token: MACHINE * COMPUTATION -> TOKEN
-function status: MACHINE * COMPUTATION -> STATUS
-                
-init InitRule
+//function color: MACHINE * COMPUTATION -> COLOR
+//function token: MACHINE * COMPUTATION -> TOKEN
+//function status: MACHINE * COMPUTATION -> STATUS
+function color: MACHINE -> COLOR
+function token: MACHINE -> TOKEN
+function status: MACHINE -> STATUS
+
+init initRule
+
+rule initRule = {
+	seqblock
+	forall m in MACHINE do {
+		//seqblock
+		if (random > 0.5) then { // Randomly set some mechines to active
+			status(m) := active
+		}
+		else {
+			status(m) := inactive
+		}
+		
+		//print "Status " + m + " => " + status(m)
+		//endseqblock
+	}
+	
+	forall m in MACHINE do {
+		print "Status " + m + " => " + status(m)
+	}
+	
+	endseqblock
+	program(self) := undef
+}
