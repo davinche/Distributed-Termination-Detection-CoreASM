@@ -145,12 +145,27 @@ rule initializeComputation(c) = {
  */
  
  rule initDetection = {
- 	//program(supervisorAgent) := @supervisorRule
+ 	program(supervisorAgent) := @supervisorRule
  	program(slaveAgent) := @slaveRule
  	program(environment) := @environmentRule
  	program(self) := undef
  }
  
+ rule supervisorRule = {
+ 	forall t in TOKEN with (tokenMachine(t) = supervisor) do {
+ 		// Supervisor is active and token is black then pass new white token
+ 		if (status(tokenMachine(supervisor),tokenComputation(t)) = inactive) then {
+			if (colour(supervisor, tokenComputation(t)) = black or tokenColour(t) = black) then {
+				seqblock
+				print "SUPERVISOR: Black token or self is black detected for Computation " + computationID(t) + ". Resending a white token"
+				tokenColour(t) := white
+				colour(supervisor, tokenComputation(t)) := white
+				tokenMachine(t) := nextMachine(supervisor)
+				endseqblock
+			}
+ 		}
+ 	}
+ }
  
  rule slaveRule = {
  	forall t in TOKEN do {
