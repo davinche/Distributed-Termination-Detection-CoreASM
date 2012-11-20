@@ -15,23 +15,31 @@ enum STATUS = {active, inactive}
 
 universe MACHINE
 universe COMPUTATION
-universe Agents = {protocol, activation, p, supervisor}
+universe TOKEN
+universe Agents = {supervisorAgent, slaveAgent}
 
 function colour: MACHINE * COMPUTATION -> COLOUR
-function token: MACHINE * COMPUTATION -> TOKEN
 function status: MACHINE * COMPUTATION -> STATUS
 function machineID: MACHINE -> NUMBER
 function machineByID: NUMBER -> MACHINE
 function nextMachine: MACHINE -> MACHINE
+function tokenComputation: TOKEN -> COMPUTATION
+function tokenColour: TOKEN -> COLOUR
+function tokenMachine: TOKEN -> MACHINE
 
 init initRule
 
 rule initRule = {
 	numMachines := 0
 	numComputations := 0
+	supervisor := undef
 	program(self) := @addMachines
 }
 
+/* ---------------------------------------
+ 	MACHINE RELATED INITIALIZATIONS
+ */
+ 
 rule addMachines = {
 	// Create and initialize the states of the machines in the cluster
 	if numMachines < MaxMachines then {
@@ -43,6 +51,7 @@ rule addMachines = {
 		endseqblock
 	}
 	else {
+		supervisor := machineByID(0)
 		// Link the mechines in a circular fashion
 		seqblock
 		forall m in MACHINE do {
@@ -69,6 +78,11 @@ rule initializeMachine(m) = {
 	machineByID(numMachines) := m
 }
 
+
+/* ---------------------------------------
+ 	COMPUTATION RELATED INITIALIZATIONS
+ */
+
 rule addComputation = {
 	// Add computations to the set COMPUTATION
 	if numComputations < MaxComputations then {
@@ -80,7 +94,7 @@ rule addComputation = {
 		endseqblock
 	}
 	else {
-		program(self) := undef
+		program(self) := @addToken
 	}
 }
 
@@ -100,3 +114,57 @@ rule initializeComputation(c) = {
 		endseqblock
 	}
 }
+
+/* ---------------------------------------
+ 	TOKEN RELATED INITIALIZATIONS
+ */
+ 
+ rule addToken = {
+ 	seqblock
+ 	forall c in COMPUTATION do {
+ 		extend TOKEN with t do {
+ 			initializeToken(t, c)
+ 		}
+ 	}
+ 	program(self) := @initDetection
+ 	endseqblock
+ }
+ 
+ rule initializeToken(t, c) = {
+ 	 //seqblock
+	 tokenComputation(t) := c
+	 tokenColour(t) := black
+	 tokenMachine(t) := machineByID(0)
+	 //print "Token Machine: " + machineID(tokenMachine(t)) + " TokenColour: " + tokenColour(t)
+	 //endseqblock
+ }
+ 
+ /* ---------------------------------------
+ 	BEGIN DETECTION ALGORITHM
+ */
+ 
+ rule initDetection = {
+ 	//program(supervisorAgent) := @supervisorRule
+ 	program(slaveAgent) := @slaveRule
+ 	program(self) := undef
+ }
+ 
+ 
+ rule slaveRule = {
+ 	forall t in TOKEN do {
+ 		m := tokenMachine(t)
+ 		c := tokenComputation(t)
+ 		// Inactive machine holding token, pass it on
+ 		//if m != supervisor and status(m, c) = inactive then {
+ 		if status(m, c) = inactive then {
+ 			if colour(m, c) = black then {
+ 				tokenColour(t) := black
+ 				colour(m, c) := white // Reset the machine colour to white
+ 			}
+ 			seqblock
+ 			print "Token passed from Machine " + machineID(m) + " to Machine " + machineID(nextMachine(m))
+ 			tokenMachine(t) := nextMachine(m)
+ 			endseqblock
+ 		}
+ 	}
+ }
