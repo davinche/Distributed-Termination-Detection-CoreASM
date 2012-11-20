@@ -141,10 +141,10 @@ rule initializeComputation(c) = {
  
  rule initDetection = {
  	program(supervisorAgent) := @supervisorRule
- 	//program(slaveAgent) := @slaveRule
+ 	program(slaveAgent) := @slaveRule
  	program(tokenControl) := @tokenRule
  	program(observer) := @observerRule
- 	//program(environment) := @environmentRule
+ 	program(environment) := @environmentRule
  	seqblock
  	forall t in TOKEN do {
  		print "TOKEN MACHINE: " + machineID(tokenMachine(t)) + " TOKEN COMPUTATION: " + computationID(tokenComputation(t)) + " TOKEN COLOUR: " + tokenColour(t)
@@ -173,13 +173,16 @@ rule initializeComputation(c) = {
  rule slaveRule = {
  	forall t in TOKEN with (tokenMachine(t) != supervisor) do {
  		if status(tokenMachine(t), tokenComputation(t)) = inactive then {
- 			seqblock
  			if colour(tokenMachine(t), tokenComputation(t)) = black then {
+ 				seqblock
  				tokenColor(t) := black
  				colour(tokenMachine(t), tokenComputation(t)) := white
+ 				tokenForwardSignal(t) := forward
+ 				endseqblock
  			}
- 			tokenForwardSignal(t) := forward
- 			endseqblock
+ 			else {
+ 				tokenForwardSignal(t) := forward
+ 			}
  		}
  	}
  }
@@ -193,6 +196,21 @@ rule initializeComputation(c) = {
 			}
 			else {
 				print "Machine " + machineID(tokenMachine(t)) + " Processing for Computation " + computationID(tokenComputation(t))
+			}
+		}
+		
+		// Token determined to require forwarding
+		if tokenForwardSignal(t) = forward then {
+			if tokenMachine(t) = supervisor then {
+				print "SUPERVISOR: Self is black or black token detected. Need to forward new white token for Computation " + computationID(tokenComputation(t))
+			}
+			else {
+				if colour(tokenMachine(t), tokenComputation(t)) = black then {
+					print "Machine " + machineID(tokenMachine(t)) + " is black. Need to forward a black token for Computation " + computationID(tokenComputation(t))
+				}
+				else {
+					print "Machine " + machineID(tokenMachine(t)) + " need to forward the token for Computation " + computationID(tokenComputation(t))
+				}
 			}
 		}
  	}
@@ -214,9 +232,9 @@ rule initializeComputation(c) = {
  			// Loop through all active machines...
  			if status(m, c) = active then {
  				// 30% chance to send a message to a random machine
- 				if randomvalue <= 0.3 then {
- 					sendMessage(m, randMachine(m), c)
- 				}
+ 				//if randomvalue <= 0.3 then {
+ 				//	sendMessage(m, randMachine(m), c)
+ 				//}
  				
  				// 50% chance of finishing job
  				if randomvalue <= 0.5 then {
