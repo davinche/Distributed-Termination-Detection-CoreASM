@@ -16,13 +16,14 @@ enum STATUS = {active, inactive}
 universe MACHINE
 universe COMPUTATION
 universe TOKEN
-universe Agents = {supervisorAgent, slaveAgent}
+universe Agents = {supervisorAgent, slaveAgent, environment}
 
 function colour: MACHINE * COMPUTATION -> COLOUR
 function status: MACHINE * COMPUTATION -> STATUS
 function machineID: MACHINE -> NUMBER
 function machineByID: NUMBER -> MACHINE
 function nextMachine: MACHINE -> MACHINE
+function computationID: COMPUTATION -> NUMBER
 function tokenComputation: TOKEN -> COMPUTATION
 function tokenColour: TOKEN -> COLOUR
 function tokenMachine: TOKEN -> MACHINE
@@ -99,6 +100,7 @@ rule addComputation = {
 }
 
 rule initializeComputation(c) = {
+	computationID(c) := numComputations
 	forall m in MACHINE do {
 		seqblock
 		// Randomly assign machines status to computations
@@ -110,7 +112,6 @@ rule initializeComputation(c) = {
 		}
 		// Initialize the machine colours to white
 		colour(m,c) := white
-		print "Machine " + machineID(m) + ": Status: " + status(m,c) + " Colour: " + colour(m,c)
 		endseqblock
 	}
 }
@@ -146,23 +147,61 @@ rule initializeComputation(c) = {
  rule initDetection = {
  	//program(supervisorAgent) := @supervisorRule
  	program(slaveAgent) := @slaveRule
+ 	program(environment) := @environmentRule
  	program(self) := undef
  }
  
  
  rule slaveRule = {
  	forall t in TOKEN do {
- 		// Inactive machine holding token, pass it on
- 		//if m != supervisor and status(m, c) = inactive then {
- 		if (status(tokenMachine(t), tokenComputation(t)) = inactive) then {
+ 		// If a machine is holding a token but is inactive, pass it on
+ 		if (tokenMachine(t) != supervisor and status(tokenMachine(t), tokenComputation(t)) = inactive) then {
  			if colour(tokenMachine(t), tokenComputation(t)) = black then {
  				tokenColour(t) := black
  				colour(tokenMachine(t), tokenComputation(t)) := white // Reset the machine colour to white
  			}
  			seqblock
- 			print "Token passed from Machine " + machineID(tokenMachine(t)) + " to Machine " + machineID(nextMachine(tokenMachine(t)))
  			tokenMachine(t) := nextMachine(tokenMachine(t))
  			endseqblock
  		}
  	}
  }
+ 
+ rule environmentRule = {
+ 	forall m in MACHINE do {
+ 		forall c in COMPUTATION do {
+ 			if status(m, c) = active then {
+ 				seqblock
+ 				// 20% chance to send a message
+ 				if randomvalue < 0.2 then {
+ 					// Send the message if the random machine is not the current machine sending the message
+ 					seqblock
+ 					sendMessage(randMachine(m), m, c)
+ 					colour(m, c) := black
+ 					endseqblock
+ 				}
+ 				
+ 				// 70% chance to finish the task
+ 				if randomvalue < 0.7 then {
+ 					print "Machine " + machineID(m) + " under Computation " + computationID(c) + " is now inactive"
+ 					status(m, c) := inactive
+ 				}
+ 				endseqblock
+ 			}
+ 		}
+ 	}
+ }
+ 
+rule sendMessage(sender, receiver, c) = {
+	seqblock
+	print "Machine " + machineID(sender) + " under Computation " + computationID(c) + " sent a message to Machine " + machineID(receiver) 
+	status(m, c) := active
+	print "Machine " + machineID(receiver) + " received a message and is now active for Computation " + computationID(c)
+	endseqblock
+}
+ 
+ // Select a random machine (for sending a message)
+ rule randMachine(curr) =
+ 	return r in
+ 		choose x in MACHINE with (machineID(x) != machineID(curr)) do
+ 			r := x
