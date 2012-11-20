@@ -18,7 +18,7 @@ enum TOKENFORWARD = {idle, forward}
 universe MACHINE
 universe COMPUTATION
 universe TOKEN
-universe Agents = {supervisorAgent, slaveAgent, environment, observer}
+universe Agents = {supervisorAgent, slaveAgent, environment}
 
 function colour: MACHINE * COMPUTATION -> COLOUR
 function status: MACHINE * COMPUTATION -> STATUS
@@ -35,7 +35,6 @@ init initRule
 rule initRule = {
 	numMachines := 0
 	numComputations := 0
-	canTerminate := false
 	program(self) := @addMachines
 }
 
@@ -143,7 +142,6 @@ rule initializeComputation(c) = {
  rule initDetection = {
  	program(supervisorAgent) := @supervisorRule
  	program(slaveAgent) := @slaveRule
- 	program(observer) := @observerRule
  	program(environment) := @environmentRule
  	program(self) := undef
  }
@@ -170,7 +168,12 @@ rule initializeComputation(c) = {
  	
  	// Detect termination
  	if forall t in TOKEN holds (tokenColour(t) = white and tokenMachine(t) = supervisor and tokenForwardSignal(t) != forward) then
- 		canTerminate := true
+ 		seqblock
+ 		print "All White tokens received. Termination detected."
+ 		program(supervisorAgent) := undef
+ 		program(slaveAgent) := undef
+ 		program(environment) := undef
+ 		endseqblock
  	endseqblock
  	 
  }
@@ -191,24 +194,6 @@ rule initializeComputation(c) = {
  			}
  		}
  	}
- }
- 
- rule observerRule = {
- 	// Detect for termination
- 	if canTerminate = true then {
- 		print "TERMINATION DETECTED"	
- 	}
- 	// Status update on tokens...
- 	else {
-	 	print ""
-	 	forall t in TOKEN do {
-	 		if tokenMachine(t) = supervisor then
-	 			print "TOKEN AT SUPERVISOR: " + machineID(tokenMachine(t)) + " TOKEN FOR COMPUTATION: " + computationID(tokenComputation(t)) + " TOKEN COLOUR: " + tokenColour(t)
-	 		else
-	 			print "TOKEN AT MACHINE: " + machineID(tokenMachine(t)) + " TOKEN FOR COMPUTATION: " + computationID(tokenComputation(t)) + " TOKEN COLOUR: " + tokenColour(t)
-	 	}
-	 	print ""
-	}
  }
  
  rule forwardToken(t) = {
@@ -247,7 +232,7 @@ rule initializeComputation(c) = {
 
  rule sendMessage(s, r, c) = {
  	seqblock
- 		print "Machine " + machineID(s) + " is now black from sending a message to Machine " + machineID(r) + " for Computation " + computationID(c)
+ 		print "Machine " + machineID(s) + " messages Machine " + machineID(r) + " for Computation " + computationID(c) + ". Machine " + machineID(s) + " is now Black."
  		colour(s, c) := black
  		print "Machine " + machineID(r) + " is now active for Computation " + computationID(c)
  	endseqblock
