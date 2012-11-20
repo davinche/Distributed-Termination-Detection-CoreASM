@@ -9,6 +9,7 @@ use TimePlugin
 // Set number of Machines and Computation
 derived MaxMachines = 5
 derived MaxComputations = 3
+derived supervisor = machineByID(0)
 
 enum COLOUR = {black, white}
 enum STATUS = {active, inactive}
@@ -17,7 +18,7 @@ enum TOKENFORWARD = {idle, forward}
 universe MACHINE
 universe COMPUTATION
 universe TOKEN
-universe Agents = {supervisorAgent, slaveAgent, environment, observer}
+universe Agents = {supervisorAgent, slaveAgent, tokenControl, environment, observer}
 
 function colour: MACHINE * COMPUTATION -> COLOUR
 function status: MACHINE * COMPUTATION -> STATUS
@@ -35,7 +36,6 @@ init initRule
 rule initRule = {
 	numMachines := 0
 	numComputations := 0
-	supervisor := undef
 	program(self) := @addMachines
 }
 
@@ -46,28 +46,20 @@ rule initRule = {
 rule addMachines = {
 	// Create and initialize the states of the machines in the cluster
 	if numMachines < MaxMachines then {
-		seqblock
 		extend MACHINE with m do {
 			initializeMachine(m)
 		}
-		numMachines := numMachines + 1
-		endseqblock
 	}
 	else {
-		supervisor := machineByID(0)
 		// Link the machines in a circular fashion
 		seqblock
 		forall m in MACHINE do {
-			seqblock
 			if machineID(m) = (MaxMachines-1) then {
 				nextMachine(m) := machineByID(0)
 			}
 			else {
 				nextMachine(m) := machineByID(machineID(m)+1)
 			}
-			
-			// print "Current Machine: " + machineID(m) + " Next Machine: " + machineID(nextMachine(m))
-			endseqblock
 		}
 		
 		// Next step is to initialize the computations on each machine
@@ -77,8 +69,11 @@ rule addMachines = {
 }
 
 rule initializeMachine(m) = {
+	seqblock
 	machineID(m) := numMachines
 	machineByID(numMachines) := m
+	numMachines := numMachines + 1
+	endseqblock
 }
 
 
@@ -89,12 +84,9 @@ rule initializeMachine(m) = {
 rule addComputation = {
 	// Add computations to the set COMPUTATION
 	if numComputations < MaxComputations then {
-		seqblock
 		extend COMPUTATION with c do {
 			initializeComputation(c)
 		}
-		numComputations := numComputations + 1
-		endseqblock
 	}
 	else {
 		program(self) := @addToken
@@ -102,9 +94,13 @@ rule addComputation = {
 }
 
 rule initializeComputation(c) = {
+	
+	seqblock
 	computationID(c) := numComputations
+	numComputations := numComputations + 1
+	endseqblock
+	
 	forall m in MACHINE do {
-		seqblock
 		// Randomly assign machines status to computations
 		if (randomvalue > 0.5) then {
 			status(m, c) := active
@@ -114,7 +110,6 @@ rule initializeComputation(c) = {
 		}
 		// Initialize the machine colours to white
 		colour(m,c) := white
-		endseqblock
 	}
 }
 
@@ -146,10 +141,17 @@ rule initializeComputation(c) = {
  
  rule initDetection = {
  	program(supervisorAgent) := @supervisorRule
- 	program(slaveAgent) := @slaveRule
+ 	//program(slaveAgent) := @slaveRule
+ 	program(tokenControl) := @tokenRule
  	program(observer) := @observerRule
- 	program(environment) := @environmentRule
- 	program(self) := undef
+ 	//program(environment) := @environmentRule
+ 	seqblock
+ 	forall t in TOKEN do {
+ 		print "TOKEN MACHINE: " + machineID(tokenMachine(t)) + " TOKEN COMPUTATION: " + computationID(tokenComputation(t)) + " TOKEN COLOUR: " + tokenColour(t)
+ 	}
+ 	print ""
+ 	endseqblock
+ 	//program(self) := undef
  }
  
  rule supervisorRule = {
@@ -184,32 +186,25 @@ rule initializeComputation(c) = {
  
  rule observerRule = {
  	forall t in TOKEN do {
- 		// Currently processing... hold onto the token
- 		if tokenForwardSignal(t) = idle then {
- 			if tokenMachine(t) = supervisor then {
- 				print "Supervisor processing Computation " + computationID(tokenComputation(t)) + "... holding onto token"
- 			}
- 			else {
- 				print "Machine " + machineID(tokenMachine(t)) + " processing Computation " + computationID(tokenComputation(t)) + "... holding onto token"
- 			}
- 		}
- 		
- 		// Forward the tokens...
- 		else {
- 			if tokenMachine(t) = supervisor then {
- 				print "SUPERVISOR: Self is black or black token detected. Forwarding new white token for Computation " + computationID(tokenComputation(t))
- 			}
- 			else {
- 				print "Machine " + machineID(tokenMachine(t)) + " finished Computation " + computationID(tokenComputation(t)) + ". Forwarding token to Machine " + machineID(nextMachine(tokenMachine(t)))
- 			}
- 			forwardToken(t)
- 		}
+ 		// Token held by machine processing...
+		if tokenForwardSignal(t) = idle and status(tokenMachine(t), tokenComputation(t)) = active then {
+			if tokenMachine(t) = supervisor then {
+				print "SUPERVISOR: Processing for Computation " + computationID(tokenComputation(t))
+			}
+			else {
+				print "Machine " + machineID(tokenMachine(t)) + " Processing for Computation " + computationID(tokenComputation(t))
+			}
+		}
  	}
  }
  
- rule forwardToken(t) = {
- 	tokenMachine(t) := nextMachine(tokenMachine(t))
- 	tokenForwardSignal(t) := idle
+ rule tokenRule = {
+ 	forall t in TOKEN do {
+ 		if tokenForwardSignal(t) = forward then {
+ 			tokenForwardSignal(t) := idle
+ 			tokenMachine(t) := nextMachine(tokenMachine(t))
+ 		}
+ 	}
  }
  
  
@@ -218,8 +213,8 @@ rule initializeComputation(c) = {
  		forall c in COMPUTATION do {
  			// Loop through all active machines...
  			if status(m, c) = active then {
- 				// 10% chance to send a message to a random machine
- 				if randomvalue <= 0.1 then {
+ 				// 30% chance to send a message to a random machine
+ 				if randomvalue <= 0.3 then {
  					sendMessage(m, randMachine(m), c)
  				}
  				
@@ -232,11 +227,12 @@ rule initializeComputation(c) = {
  	}
  }
 
- rule sendMessage(sender, receiver, compute) = {
+ rule sendMessage(s, r, c) = {
  	seqblock
- 		print "Machine " + machineID(sender) + " requested Machine " + machineID(receiver) + " to process a job for Computation " + computationID(compute)
- 		status(receiver, compute) := active
- 		print "Machine " + machineID(receiver) + " is now active for Computation " + computationID(compute)
+ 		print "Machine " + machineID(s) + " requested Machine " + machineID(r) + " to process a job for Computation " + computationID(c)
+ 		colour(s, c) := black
+ 		status(r, c) := active
+ 		print "Machine " + machineID(r) + " is now ready to process a job for Computation " + computationID(c)
  	endseqblock
  }
  
