@@ -6,31 +6,97 @@ use Signature
 use MathPlugin
 use TimePlugin
 
-derived numMachines = 100
-enum COLOR = {black, white}
+// Set number of Machines and Computation
+derived MaxMachines = 5
+derived MaxComputations = 3
+
+enum COLOUR = {black, white}
 enum STATUS = {active, inactive}
 
 universe MACHINE
+universe COMPUTATION
 universe Agents = {protocol, activation, p, supervisor}
 
-function color: MACHINE -> COLOR
-function token: MACHINE -> TOKEN
-function status: MACHINE -> STATUS
+function colour: MACHINE * COMPUTATION -> COLOUR
+function token: MACHINE * COMPUTATION -> TOKEN
+function status: MACHINE * COMPUTATION -> STATUS
+function machineID: MACHINE -> NUMBER
+function machineByID: NUMBER -> MACHINE
 function nextMachine: MACHINE -> MACHINE
 
 init initRule
 
 rule initRule = {
-	
-	if numMachines > 1 then {
+	numMachines := 0
+	numComputations := 0
+	program(self) := @addMachines
+}
+
+rule addMachines = {
+	// Create and initialize the states of the machines in the cluster
+	if numMachines < MaxMachines then {
+		seqblock
 		extend MACHINE with m do {
 			initializeMachine(m)
 		}
-		numMachines := numMachines - 1;
+		numMachines := numMachines + 1
+		endseqblock
 	}
-	program(self) := undef
+	else {
+		// Link the mechines in a circular fashion
+		seqblock
+		forall m in MACHINE do {
+			seqblock
+			if machineID(m) = (MaxMachines-1) then {
+				nextMachine(m) := machineByID(0)
+			}
+			else {
+				nextMachine(m) := machineByID(machineID(m)+1)
+			}
+			
+			// print "Current Machine: " + machineID(m) + " Next Machine: " + machineID(nextMachine(m))
+			endseqblock
+		}
+		
+		// Next step is to initialize the computations on each machine
+		program(self) := @addComputation
+		endseqblock
+	}
 }
 
-rule initializeMachine(m) {
-	if randomvalue > 0.5 then status(m) := active else status(m) := inactive
+rule initializeMachine(m) = {
+	machineID(m) := numMachines
+	machineByID(numMachines) := m
+}
+
+rule addComputation = {
+	// Add computations to the set COMPUTATION
+	if numComputations < MaxComputations then {
+		seqblock
+		extend COMPUTATION with c do {
+			initializeComputation(c)
+		}
+		numComputations := numComputations + 1
+		endseqblock
+	}
+	else {
+		program(self) := undef
+	}
+}
+
+rule initializeComputation(c) = {
+	forall m in MACHINE do {
+		seqblock
+		// Randomly assign machines status to computations
+		if (randomvalue > 0.5) then {
+			status(m, c) := active
+		}
+		else {
+			status(m, c) := inactive
+		}
+		// Initialize the machine colours to white
+		colour(m,c) := white
+		print "Machine " + machineID(m) + ": Status: " + status(m,c) + " Colour: " + colour(m,c)
+		endseqblock
+	}
 }
