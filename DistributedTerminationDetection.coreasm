@@ -7,8 +7,8 @@ use MathPlugin
 use TimePlugin
 
 // Set number of Machines and Computation
-derived MaxMachines = 5
-derived MaxComputations = 3
+derived MaxMachines = 3
+derived MaxComputations = 2
 derived supervisor = machineByID(0)
 
 enum COLOUR = {black, white}
@@ -18,7 +18,7 @@ enum TOKENFORWARD = {idle, forward}
 universe MACHINE
 universe COMPUTATION
 universe TOKEN
-universe Agents = {supervisorAgent, slaveAgent, tokenControl, environment, observer}
+universe Agents = {supervisorAgent, slaveAgent, environment, observer}
 
 function colour: MACHINE * COMPUTATION -> COLOUR
 function status: MACHINE * COMPUTATION -> STATUS
@@ -29,13 +29,13 @@ function computationID: COMPUTATION -> NUMBER
 function tokenComputation: TOKEN -> COMPUTATION
 function tokenColour: TOKEN -> COLOUR
 function tokenMachine: TOKEN -> MACHINE
-function tokenForwardSignal: TOKEN -> TOKENFORWARD
 
 init initRule
 
 rule initRule = {
 	numMachines := 0
 	numComputations := 0
+	canTerminate := false
 	program(self) := @addMachines
 }
 
@@ -124,6 +124,7 @@ rule initializeComputation(c) = {
  			initializeToken(t, c)
  		}
  	}
+ 	
  	program(self) := @initDetection
  	endseqblock
  }
@@ -142,32 +143,36 @@ rule initializeComputation(c) = {
  rule initDetection = {
  	program(supervisorAgent) := @supervisorRule
  	program(slaveAgent) := @slaveRule
- 	program(tokenControl) := @tokenRule
  	program(observer) := @observerRule
  	program(environment) := @environmentRule
- 	seqblock
- 	forall t in TOKEN do {
- 		print "TOKEN MACHINE: " + machineID(tokenMachine(t)) + " TOKEN COMPUTATION: " + computationID(tokenComputation(t)) + " TOKEN COLOUR: " + tokenColour(t)
- 	}
- 	print ""
- 	endseqblock
- 	//program(self) := undef
+ 	program(self) := undef
  }
  
  rule supervisorRule = {
  	// Process the tokens held by the supervisor
+ 	seqblock
  	forall t in TOKEN with (tokenMachine(t) = supervisor) do {
  		if status(supervisor, tokenComputation(t)) = inactive then {
  			// Black token detected, or supervisor is black... pass a new white token
  			if colour(supervisor, tokenComputation(t)) = black or tokenColour(t) = black then {
  				seqblock
+ 				print "SUPERVISOR: Self is Black or Black token received. Sending new White token for Computation " + computationID(tokenComputation(t))
  				tokenColour(t) := white
  				colour(supervisor, tokenComputation(t)) := white
- 				tokenForwardSignal(t) := forward
+ 				forwardToken(t)
  				endseqblock
  			}
  		}
+ 		else {
+ 			print "SUPERVISOR: Currently processing job for Computation " + computationID(tokenComputation(t))
+ 		}
  	}
+ 	
+ 	// Detect termination
+ 	if forall t in TOKEN holds (tokenColour(t) = white and tokenMachine(t) = supervisor and tokenForwardSignal(t) != forward) then
+ 		canTerminate := true
+ 	endseqblock
+ 	 
  }
  
  rule slaveRule = {
@@ -175,54 +180,48 @@ rule initializeComputation(c) = {
  		if status(tokenMachine(t), tokenComputation(t)) = inactive then {
  			if colour(tokenMachine(t), tokenComputation(t)) = black then {
  				seqblock
- 				tokenColor(t) := black
+ 				print "Machine " + machineID(tokenMachine(t)) + " is Black. Token forwarded is now Black. Machine is now reset to White."
+ 				tokenColour(t) := black
  				colour(tokenMachine(t), tokenComputation(t)) := white
- 				tokenForwardSignal(t) := forward
+ 				forwardToken(t)
  				endseqblock
  			}
  			else {
- 				tokenForwardSignal(t) := forward
+ 				forwardToken(t)
  			}
  		}
  	}
  }
  
  rule observerRule = {
- 	forall t in TOKEN do {
- 		// Token held by machine processing...
-		if tokenForwardSignal(t) = idle and status(tokenMachine(t), tokenComputation(t)) = active then {
-			if tokenMachine(t) = supervisor then {
-				print "SUPERVISOR: Processing for Computation " + computationID(tokenComputation(t))
-			}
-			else {
-				print "Machine " + machineID(tokenMachine(t)) + " Processing for Computation " + computationID(tokenComputation(t))
-			}
-		}
-		
-		// Token determined to require forwarding
-		if tokenForwardSignal(t) = forward then {
-			if tokenMachine(t) = supervisor then {
-				print "SUPERVISOR: Self is black or black token detected. Need to forward new white token for Computation " + computationID(tokenComputation(t))
-			}
-			else {
-				if colour(tokenMachine(t), tokenComputation(t)) = black then {
-					print "Machine " + machineID(tokenMachine(t)) + " is black. Need to forward a black token for Computation " + computationID(tokenComputation(t))
-				}
-				else {
-					print "Machine " + machineID(tokenMachine(t)) + " need to forward the token for Computation " + computationID(tokenComputation(t))
-				}
-			}
-		}
+ 	// Detect for termination
+ 	if canTerminate = true then {
+ 		print "TERMINATION DETECTED"	
  	}
+ 	// Status update on tokens...
+ 	else {
+	 	print ""
+	 	forall t in TOKEN do {
+	 		if tokenMachine(t) = supervisor then
+	 			print "TOKEN AT SUPERVISOR: " + machineID(tokenMachine(t)) + " TOKEN FOR COMPUTATION: " + computationID(tokenComputation(t)) + " TOKEN COLOUR: " + tokenColour(t)
+	 		else
+	 			print "TOKEN AT MACHINE: " + machineID(tokenMachine(t)) + " TOKEN FOR COMPUTATION: " + computationID(tokenComputation(t)) + " TOKEN COLOUR: " + tokenColour(t)
+	 	}
+	 	print ""
+	}
  }
  
- rule tokenRule = {
- 	forall t in TOKEN do {
- 		if tokenForwardSignal(t) = forward then {
- 			tokenForwardSignal(t) := idle
- 			tokenMachine(t) := nextMachine(tokenMachine(t))
- 		}
+ rule forwardToken(t) = {
+ 	if tokenMachine(t) = supervisor then {
+ 		print "Token that is " + tokenColour(t) + " - forwarded from SUPERVISOR to Machine " + machineID(nextMachine(tokenMachine(t))) + " for Computation " + computationID(tokenComputation(t))
  	}
+ 	else if nextMachine(tokenMachine(t)) = supervisor then {
+ 		print "Token that is " + tokenColour(t) + " - forwarded from Machine " + machineID(tokenMachine(t)) + " to SUPERVISOR for Computation " + computationID(tokenComputation(t))
+ 	}
+ 	else {
+ 		print "Token that is " + tokenColour(t) + " - forwarded from Machine " + machineID(tokenMachine(t)) + " to Machine " + machineID(nextMachine(tokenMachine(t))) + " for Computation " + computationID(tokenComputation(t))
+ 	}
+ 	tokenMachine(t) := nextMachine(tokenMachine(t))
  }
  
  
@@ -232,9 +231,10 @@ rule initializeComputation(c) = {
  			// Loop through all active machines...
  			if status(m, c) = active then {
  				// 30% chance to send a message to a random machine
- 				//if randomvalue <= 0.3 then {
- 				//	sendMessage(m, randMachine(m), c)
- 				//}
+ 				if randomvalue <= 0.3 then {
+ 					let r = randMachine(m) in
+ 						sendMessage(m, r, c)
+ 				}
  				
  				// 50% chance of finishing job
  				if randomvalue <= 0.5 then {
@@ -247,10 +247,9 @@ rule initializeComputation(c) = {
 
  rule sendMessage(s, r, c) = {
  	seqblock
- 		print "Machine " + machineID(s) + " requested Machine " + machineID(r) + " to process a job for Computation " + computationID(c)
+ 		print "Machine " + machineID(s) + " is now black from sending a message to Machine " + machineID(r) + " for Computation " + computationID(c)
  		colour(s, c) := black
- 		status(r, c) := active
- 		print "Machine " + machineID(r) + " is now ready to process a job for Computation " + computationID(c)
+ 		print "Machine " + machineID(r) + " is now active for Computation " + computationID(c)
  	endseqblock
  }
  
