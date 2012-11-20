@@ -151,12 +151,14 @@ rule initializeComputation(c) = {
  
  
  rule slaveRule = {
+ 	print "HelloWorld"
  	forall t in TOKEN do {
+ 		/*
  		m := tokenMachine(t)
  		c := tokenComputation(t)
  		// Inactive machine holding token, pass it on
  		//if m != supervisor and status(m, c) = inactive then {
- 		if status(m, c) = inactive then {
+ 		if (status(m, c) = inactive) then {
  			if colour(m, c) = black then {
  				tokenColour(t) := black
  				colour(m, c) := white // Reset the machine colour to white
@@ -164,6 +166,21 @@ rule initializeComputation(c) = {
  			seqblock
  			print "Token passed from Machine " + machineID(m) + " to Machine " + machineID(nextMachine(m))
  			tokenMachine(t) := nextMachine(m)
+ 			endseqblock
+ 		}
+ 		*/
+ 		
+
+ 		// Inactive machine holding token, pass it on
+ 		//if m != supervisor and status(m, c) = inactive then {
+ 		if (status(tokenMachine(t), tokenComputation(t)) = inactive) then {
+ 			if colour(tokenMachine(t), tokenComputation(t)) = black then {
+ 				tokenColour(t) := black
+ 				colour(tokenMachine(t), tokenComputation(t)) := white // Reset the machine colour to white
+ 			}
+ 			seqblock
+ 			print "Token passed from Machine " + machineID(tokenMachine(t)) + " to Machine " + machineID(nextMachine(tokenMachine(t)))
+ 			tokenMachine(t) := nextMachine(tokenMachine(t))
  			endseqblock
  		}
  	}
