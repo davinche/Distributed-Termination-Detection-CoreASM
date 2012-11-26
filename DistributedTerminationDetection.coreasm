@@ -13,7 +13,6 @@ derived supervisor = machineByID(0)
 
 enum COLOUR = {black, white}
 enum STATUS = {active, inactive}
-enum TOKENFORWARD = {idle, forward}
 
 universe MACHINE
 universe COMPUTATION
@@ -132,7 +131,6 @@ rule initializeComputation(c) = {
 	 tokenComputation(t) := c
 	 tokenColour(t) := black
 	 tokenMachine(t) := supervisor
-	 tokenForwardSignal(t) := idle
  }
  
  /* ---------------------------------------
@@ -167,7 +165,7 @@ rule initializeComputation(c) = {
  	}
  	
  	// Detect termination
- 	if forall t in TOKEN holds (tokenColour(t) = white and tokenMachine(t) = supervisor and tokenForwardSignal(t) != forward) then
+ 	if forall t in TOKEN holds (tokenColour(t) = white and tokenMachine(t) = supervisor) then
  		seqblock
  		print "All White tokens received. Termination detected."
  		program(supervisorAgent) := undef
@@ -235,6 +233,7 @@ rule initializeComputation(c) = {
  		print "Machine " + machineID(s) + " messages Machine " + machineID(r) + " for Computation " + computationID(c) + ". Machine " + machineID(s) + " is now Black."
  		colour(s, c) := black
  		print "Machine " + machineID(r) + " is now active for Computation " + computationID(c)
+ 		if status(r, c) = inactive then status(r, c) := active
  	endseqblock
  }
  
